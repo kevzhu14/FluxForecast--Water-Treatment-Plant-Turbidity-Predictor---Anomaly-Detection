@@ -1,0 +1,141 @@
+\documentclass[11pt, letterpaper]{article}
+
+% COMPACT PAGE LAYOUT
+% Reduced margins to 0.6in to maximize space
+\usepackage[margin=0.6in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{titlesec}
+\usepackage{enumitem} % Required to compact lists
+
+% PARAGRAPH SPACING
+% Adds space between paragraphs (as requested) but keeps it tight
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+
+% COMPACT HEADINGS
+% Reduces space around section titles
+\titlespacing*{\section}{0pt}{6pt}{2pt}
+\titlespacing*{\subsection}{0pt}{4pt}{2pt}
+
+% Title Metadata
+\title{\vspace{-3em}\textbf{Water Treatment Plant Digital Twin}\\ \large NeurIPS 2026 - AI for Science Workshop}
+\author{Jason Pereira \and Karim Nasser El Harake \and Kevin Zhu}
+\date{\vspace{-2em}}
+
+\begin{document}
+
+\maketitle
+
+\section{Context}
+Water treatment plants (WTP) are complex and integrated systems designed to remove harmful or undesirable substances from source water, producing water that is fit for human consumption. Treatment is influenced by a wide range of interacting variables, including water quality characteristics (e.g., turbidity, pH, alkalinity, temperature, etc.), operational decisions (e.g., chemical dosing, flow rates, filtration conditions, etc.), and external conditions (e.g., seasonal effects, water source, etc.).
+
+Creating a digital twin using machine learning provides an opportunity to transform traditional water treatment operations into proactive, data-driven systems. By learning complex relationships within historical and real-time plant data, AI-driven models can enhance predictive monitoring, process optimization, and process control by predicting targeted parameters. A digital twin can improve efficiency, quality, accuracy and reduce implementation cost [1].
+
+The goal for our model is to predict treated water turbidity given raw water data and operation. Turbidity is the measure of relative clarity of water caused by large numbers of suspended particles - making it a good water quality indicator and basis for an anomaly detection algorithm. With time-series data sampling, iterative turbidity prediction allows for operational decisions to be made in upstream processes. For example, if the predicted treated water turbidity is high, upstream treatment processes such as coagulant addition may be upregulated to ensure aggregation and removal of suspended particles.
+
+\section{Conditions of Success}
+The goal for this project is to predict the treated water turbidity given the sampled raw data and operational data. Based on the Guidelines for Canadian Drinking Water Quality, turbidity should be measured with an accuracy of $\pm0.02$ NTU [2]. A successful implementation of our model will provide accuracy that is equal or better than turbidimeters. If the turbidity is $y$, our model is a success if the following is true:
+\begin{equation}
+| y_{model} - y_{measured} | \leq 0.02
+\end{equation}
+
+\section{Data}
+A sampled dataset from one WTP in Eastern Ontario will be used. The data is organized as a time series - one data sample per day. Locations within the process where data samples are collected is depicted in Figure \ref{fig:wtp}. The dataset has multiple gaps due to varying sampling frequencies for each parameter. Additionally, anomalous data from sensor errors also may be present.
+
+\begin{table}[h]
+    \centering
+    \caption{Dataset Example - displaying a subset of the variables.}
+    \small
+    \begin{tabular}{l c c c c c c c}
+    \toprule
+    \textbf{Date} & \textbf{Raw Flow} & \textbf{Raw Turb.} & \textbf{Raw Colour} & \textbf{Raw Fe} & \textbf{Raw Mn} & \textbf{Coag.} & \textbf{TW Al} \\
+     & $[m^{3}/d]$ & $[NTU]$ & $[TCU]$ & $[mg/L]$ & $[mg/L]$ & Used $[L]$ & $[\mu g/L]$ \\
+    \midrule
+    2017-01-04 & 3,589 & 2.1 & 7 & 0.07 & 0.01 & 235 & 30 \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    % Sized to 25% of text height to fit perfectly on page 2
+    \includegraphics[width=\linewidth, height=0.25\textheight, keepaspectratio]{wtp.png}
+    \caption{Simple WTP Schematic with Sample Locations}
+    \label{fig:wtp}
+\end{figure}
+
+\subsection*{Input}
+Our input data consists of a time series, tabular dataset of sample results on the raw water influent to the WTP and other operational parameters (e.g., chemical dosage, filter backwash, etc.).
+
+\subsection*{Output}
+A prediction of the treated water turbidity. Additionally, an evaluation (binary classification) of whether the system is deviating from regular operational standards (if time allows).
+
+\section{Evaluation}
+We will track standard regression metrics ($R^{2}$, RMSE, MAE) to evaluate the model. AUPRC will be monitored for the anomaly detection task (if time allows).
+
+\section{Modeling}
+The dataset used for the water treatment plant digital twin consists of structured, time series tabular data representing chemical parameters, operational parameters, and external conditions. Neural network architectures will be explored to effectively capture complex relationships underlying the data.
+
+Given the asynchronous sampling of the dataset, a Temporal Convolutional Network (TCN) could potentially be a strong primary predictive model for treated water turbidity. TCN offers more stable training, reduced sensitivity to input irregularities, and efficient modeling of long-term temporal dependencies [2][3][4].
+
+A variational autoencoder (VAE) can be implemented upstream in our pipeline from the TCN, acting as an anomaly detector. Reconstruction loss will be used to inform whether system performance is irregular, depending on water quality indicators. Research in VAE architectures for time series data and process monitoring is an area of growing interest that presents a large opportunity for real-world application and adoption [5][6].
+
+For comparison and benchmarking, baseline models will also be leveraged using traditional machine learning approaches, including XGBoost. Data parameters most relevant to turbidity will be manually selected based on exploratory data analysis.
+
+\section{Stretch goals}
+% Compact list to ensure it fits on Page 2
+\begin{itemize}[noitemsep, topsep=0pt]
+    \item Building on the turbidity predicting mode, add an optimization layer to identify process configurations that minimize predicted treated-water turbidity (using the trained model as a surrogate model).
+    \item Predict additional effluent parameters.
+    \item Evaluate generalizability and robustness of the model by testing on a different, similar WTP.
+    \item Expand pipeline to other chemical type facilities that require predicting parameter or optimization.
+\end{itemize}
+
+% Force references to Page 3
+\newpage
+
+\begin{thebibliography}{9}
+
+\bibitem{wang2024}
+A-J Wang et al.
+\newblock Digital Twins for Wastewater Treatment: A Technical Review.
+\newblock \emph{Engineering}, 36:21-35, May 2024. doi: 10.1016/j.eng.2024.04.012.
+
+\bibitem{canada2005}
+Health Canada.
+\newblock Guidelines for Canadian Drinking Water Quality: Guideline Technical Document - Turbidity.
+\newblock 2005.
+
+\bibitem{geng2024}
+Y Geng et al.
+\newblock Multi-Scale Temporal Convolutional Networks for Effluent COD Prediction in Industrial Wastewater.
+\newblock \emph{Applied Sciences}, 14(13):5824, January 2024. doi: 10.3390/app14135824.
+
+\bibitem{xie2024}
+Y Xie et al.
+\newblock A hybrid deep learning approach to improve real-time effluent quality prediction in wastewater treatment plant.
+\newblock \emph{Water Research}, 250:121092, February 2024. doi: 10.1016/j.watres.2023.121092.
+
+\bibitem{hu2023}
+Y Hu et al.
+\newblock Application of hybrid improved temporal convolution network model in time series prediction of river water quality.
+\newblock \emph{Sci Rep}, 13(1):11260, July 2023. doi: 10.1038/s41598-023-38465-3.
+
+\bibitem{desai2021}
+A Desai et al.
+\newblock TimeVAE: A Variational Auto-Encoder for Multivariate Time Series Generation.
+\newblock \emph{arXiv}.
+
+\bibitem{lee2019}
+S Lee et al.
+\newblock Process monitoring using variational autoencoder for high-dimensional nonlinear processes.
+\newblock \emph{Engineering Applications of Artificial Intelligence}, 83:13-27, August 2019. doi: 10.1016/j.engappai.2019.04.013.
+
+\end{thebibliography}
+
+\end{document}
