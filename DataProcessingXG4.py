@@ -131,7 +131,7 @@ def optimization_objective(space):
            verbose=False)
 
    y_val_pred = model.predict(X_val)
-   
+
    val_r2 = r2_score(y_val, y_val_pred)
    val_mse = mean_squared_error(y_val, y_val_pred)
    val_mae = mean_absolute_error(y_val, y_val_pred)
@@ -275,9 +275,9 @@ test_metrics_opt  = get_regression_metrics(xgb_optimized_model, X_test, y_test)
 print("Test Metrics for Optimized Model: ", test_metrics_opt)
 
 saved_metrics_df = pd.DataFrame({
-    'Metric': ['MAE', 'MSE', 'Max Error', 'MAPE'],
-    'Baseline Model': [test_metrics['mae'], test_metrics['mse'], test_metrics['max_error'], test_metrics['mape']],
-    'Optimized Model': [test_metrics_opt['mae'], test_metrics_opt['mse'], test_metrics_opt['max_error'], test_metrics_opt['mape']]
+    'Metric': ['MAE', 'MSE', 'Max Error', 'MAPE', 'Train R2', 'Validation R2', 'Test R2'],
+    'Baseline Model': [test_metrics['mae'], test_metrics['mse'], test_metrics['max_error'], test_metrics['mape'], r2_score(y_train, y_train_pred), r2_score(y_val, y_val_pred), r2_score(y_test, y_test_pred)],
+    'Optimized Model': [test_metrics_opt['mae'], test_metrics_opt['mse'], test_metrics_opt['max_error'], test_metrics_opt['mape'], r2_score(y_train, y_train_pred_opt), r2_score(y_val, y_val_pred_opt), r2_score(y_test, y_test_pred_opt)]
 })
 
 saved_hparameters_df = pd.DataFrame({
