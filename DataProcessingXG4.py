@@ -3,8 +3,10 @@ import numpy as np
 from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score,
                              mean_absolute_error, mean_squared_error, max_error, mean_absolute_percentage_error)
 from sklearn.metrics import r2_score
-import xgboost as xgb 
-
+import xgboost as xgb
+from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
+from sklearn.model_selection import cross_val_score
+from matplotlib import pyplot as plt
 
 
 def DataSplit(raw_data):
@@ -68,7 +70,6 @@ def DataProcessing(df):
     return df_copy #,y
 
 
-
 def SlidingWindowWithTarget(df, window_size, shift_step):
     data = []
 
@@ -84,6 +85,7 @@ def SlidingWindowWithTarget(df, window_size, shift_step):
         i += shift_step
 
     return data
+
 
 def get_regression_metrics(model, X, y_true):
 
@@ -106,10 +108,45 @@ def get_regression_metrics(model, X, y_true):
 
     return metrics_dict
 
+
+def optimization_objective(space):
+   # Create an XGBoost regressor with the hyperparameters from the search space
+   model = xgb.XGBRegressor(
+                   n_estimators = int(space['n_estimators']),
+                   max_depth = int(space['max_depth']),
+                   learning_rate = space['learning_rate'],
+                   subsample = space['subsample'],
+                   reg_lambda = space['reg_lambda'],
+                   gamma = space['gamma'],
+                   reg_alpha = int(space['reg_alpha']),
+                   min_child_weight = int(space['min_child_weight']),
+                   colsample_bytree = space['colsample_bytree'],
+                   random_state = random_state,
+                   eval_metric="rmse",
+                   early_stopping_rounds=15)
+
+   # Fit the model on the training data and evaluate on the validation set
+   model.fit(X_train, y_train,
+           eval_set= [(X_val, y_val)],
+           verbose=False)
+
+   y_val_pred = model.predict(X_val)
+   
+   val_r2 = r2_score(y_val, y_val_pred)
+   val_mse = mean_squared_error(y_val, y_val_pred)
+   val_mae = mean_absolute_error(y_val, y_val_pred)
+  
+   return {'loss': val_mse, 'status': STATUS_OK, 'metrics': {'r2': val_r2, 'mse': val_mse, 'mae': val_mae}}
+
+'''
+Main Execution
+'''
+
 threshold = 0.10
-window_size=7
-shift_step=7
-train_raw, val_raw, test_raw = DataSplit("Raw data.csv")
+window_size = 7
+shift_step = 7
+random_state = 42
+train_raw, val_raw, test_raw = DataSplit("data/WTP_raw_data.csv")
 
 X_train_df = DataProcessing(train_raw)
 X_val_df   = DataProcessing(val_raw)
@@ -139,12 +176,10 @@ xgb_model = xgb.XGBRegressor(
     reg_lambda=10,
     reg_aplha=1,
     gamma=0.0,
-    random_state=42,
+    random_state=random_state,
     eval_metric="rmse",
     early_stopping_rounds = 50
 )
-
-
 
 xgb_model.fit(
     X_train, y_train,
@@ -180,3 +215,77 @@ print("Model TEST R2:", r2_score(y_test, y_test_pred))
 print("Train y mean/std:", y_train.mean(), y_train.std())
 print("Val   y mean/std:", y_val.mean(), y_val.std())
 print("Test  y mean/std:", y_test.mean(), y_test.std())
+
+'''
+Hyperparameter Optimization with Hyperopt
+'''
+
+space={'max_depth': hp.quniform("max_depth", 3, 8, 1),
+       'gamma': hp.uniform('gamma', 0, 2),
+       'subsample': hp.uniform('subsample', 0.6, 1),
+       'reg_alpha' : hp.uniform('reg_alpha', 0.1, 5),
+       'reg_lambda' : hp.uniform('reg_lambda', 5, 50),
+       'learning_rate' : hp.uniform('learning_rate', 0.001, 0.05),
+       'colsample_bytree' : hp.uniform('colsample_bytree', 0.6, 1),
+       'min_child_weight' : hp.quniform('min_child_weight', 1, 5, 1),
+       'n_estimators': hp.quniform('n_estimators', 100, 300, 10)}
+
+# fix RNG so optimization is deterministic
+trials = Trials()
+
+# Run the hyperparameter optimization and get the best hyperparameters
+best_hyperparams = fmin(fn = optimization_objective,
+                       space = space,
+                       algo = tpe.suggest,
+                       max_evals = 2000,
+                       trials = trials,
+                       rstate = np.random.default_rng(random_state))
+                      
+print("\nBest Hyperparameters:", best_hyperparams)
+
+# Train the final model with the best hyperparameters
+xgb_optimized_model = xgb.XGBRegressor(
+   n_estimators=int(best_hyperparams['n_estimators']),
+   max_depth=int(best_hyperparams['max_depth']),
+   learning_rate=best_hyperparams['learning_rate'],
+   subsample=best_hyperparams['subsample'],
+   colsample_bytree=best_hyperparams['colsample_bytree'],
+   reg_lambda=best_hyperparams['reg_lambda'],
+   reg_alpha=int(best_hyperparams['reg_alpha']),
+   gamma=best_hyperparams['gamma'],
+   random_state=random_state,
+   eval_metric="rmse",
+   early_stopping_rounds = 15
+)
+
+xgb_optimized_model.fit(
+   X_train, y_train,
+   eval_set=[(X_val, y_val)],
+   verbose=False
+)
+
+y_train_pred_opt = xgb_optimized_model.predict(X_train)
+y_val_pred_opt   = xgb_optimized_model.predict(X_val)
+y_test_pred_opt  = xgb_optimized_model.predict(X_test)
+
+print(f"Training R2 Score for Optimized Model:   {r2_score(y_train, y_train_pred_opt):.6f}")
+print(f"Validation R2 Score for Optimized Model: {r2_score(y_val,   y_val_pred_opt):.6f}")
+print(f"Test R2 Score for Optimized Model:       {r2_score(y_test,  y_test_pred_opt):.6f}")
+test_metrics_opt  = get_regression_metrics(xgb_optimized_model, X_test, y_test)
+print("Test Metrics for Optimized Model: ", test_metrics_opt)
+
+saved_metrics_df = pd.DataFrame({
+    'Metric': ['MAE', 'MSE', 'Max Error', 'MAPE'],
+    'Baseline Model': [test_metrics['mae'], test_metrics['mse'], test_metrics['max_error'], test_metrics['mape']],
+    'Optimized Model': [test_metrics_opt['mae'], test_metrics_opt['mse'], test_metrics_opt['max_error'], test_metrics_opt['mape']]
+})
+
+saved_hparameters_df = pd.DataFrame({
+    'Hyperparameter': ['n_estimators', 'max_depth', 'learning_rate', 'subsample', 'colsample_bytree', 'reg_lambda', 'reg_alpha', 'gamma', 'min_child_weight', 'early_stopping_rounds'],
+    'Baseline Model': [300, 3, 0.01, 1, 1.0, 10, 1, 0.0, 1, 50],
+    'Bayesian Optimization': [int(best_hyperparams['n_estimators']), int(best_hyperparams['max_depth']), best_hyperparams['learning_rate'], best_hyperparams['subsample'], best_hyperparams['colsample_bytree'], best_hyperparams['reg_lambda'], int(best_hyperparams['reg_alpha']), best_hyperparams['gamma'], int(best_hyperparams['min_child_weight']), 15]
+})
+
+# Save the metrics and hyperparameters to CSV files
+saved_metrics_df.to_csv("xgb_test_metrics_comparison.csv", index=False)
+saved_hparameters_df.to_csv("xgb_hyperparameters_comparison.csv", index=False)
