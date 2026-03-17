@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import random
+import torch
 from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score,
                              mean_absolute_error, mean_squared_error, max_error, mean_absolute_percentage_error)
 from sklearn.metrics import r2_score
@@ -7,6 +9,14 @@ import xgboost as xgb
 from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
 from sklearn.model_selection import cross_val_score
 from matplotlib import pyplot as plt
+
+SEED = 42
+
+random.seed(SEED)
+np.random.seed(SEED)
+
+torch.manual_seed(SEED)
+torch.cuda.manual_seed_all(SEED)
 
 
 def DataSplit(raw_data):
