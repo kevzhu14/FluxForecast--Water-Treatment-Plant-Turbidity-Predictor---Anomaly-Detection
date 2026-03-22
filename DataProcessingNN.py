@@ -11,6 +11,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torchmetrics.functional as tmf
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 import joblib
 import json
 import os
@@ -24,14 +25,37 @@ def DataSplit(raw_data):
     test_df  = raw_data[raw_data["Date"].dt.year >= 2024].copy()
     return train_df, val_df, test_df
 
-def SlidingWindowWithTarget(df, window_size, shift_step):
-    data = []
-    i = 0
-    while i + window_size < df.shape[0]:
-        window = df.iloc[i:i+window_size]  
-        target_value = df.iloc[i+window_size]["[Filt] Mean Turbidity [NTU]"]  # [Filt] Max Turbidity [NTU] #[Filt] Mean Turbidity [NTU] [TW] Al [mg/L]  # window_size +2
-        data.append((window, target_value))
-        i += shift_step
+def SlidingWindowWithTarget(
+    df,
+    window_size,
+    shift_step,
+    task="regression",
+    target_col="[Filt] Mean Turbidity [NTU]",
+    threshold=None,
+    horizon=1
+):
+    data, i = [], 0
+    
+    if task == "regression":
+        while i + window_size < len(df):
+            window = df.iloc[i:i + window_size]
+            target = df.iloc[i + window_size][target_col]
+            data.append((window, float(target)))
+            i += shift_step
+
+    elif task == "classification":
+        if threshold is None:
+            raise ValueError("threshold must be provided for classification")
+        while i + window_size + horizon - 1 < len(df):
+            window = df.iloc[i:i + window_size]
+            future_vals = df.iloc[i + window_size:i + window_size + horizon][target_col]
+            target = 1.0 if future_vals.max() > threshold else 0.0
+            data.append((window, target))
+            i += shift_step
+
+    else:
+        raise ValueError("task must be 'regression' or 'classification'")
+
     return data
 
 def WindowsToNmp(data):

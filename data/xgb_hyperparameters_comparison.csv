@@ -1,11 +1,11 @@
 Hyperparameter,Baseline Model,Bayesian Optimization
-n_estimators,300.0,210.0
-max_depth,3.0,4.0
-learning_rate,0.01,0.03947476313716238
-subsample,1.0,0.6058645921816397
-colsample_bytree,1.0,0.9061735058266348
-reg_lambda,10.0,9.796536378541475
+n_estimators,300.0,290.0
+max_depth,3.0,5.0
+learning_rate,0.01,0.04278599683047213
+subsample,1.0,0.8099242068093845
+colsample_bytree,1.0,0.9791478916415464
+reg_lambda,10.0,15.690419039325581
 reg_alpha,1.0,0.0
-gamma,0.0,6.565999002035308e-05
+gamma,0.0,0.00044859396677779064
 min_child_weight,1.0,5.0
 early_stopping_rounds,50.0,15.0

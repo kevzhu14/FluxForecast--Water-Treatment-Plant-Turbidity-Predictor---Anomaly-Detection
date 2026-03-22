@@ -1,0 +1,1 @@
+{"framework": "xgboost", "model_class": "XGBRegressor", "extra": {"window": 14, "shift": 7}}
