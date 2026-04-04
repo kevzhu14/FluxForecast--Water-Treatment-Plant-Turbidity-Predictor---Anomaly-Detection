@@ -7,5 +7,6 @@
     "shift_step": 7,
     "model_type": "naive",
     "prob_threshold": 0.5,
+    "use_pretrained": true,
     "seed": 42
 }

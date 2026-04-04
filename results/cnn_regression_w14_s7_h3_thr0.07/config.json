@@ -7,6 +7,7 @@
     "shift_step": 7,
     "model_type": "cnn",
     "prob_threshold": 0.5,
+    "use_pretrained": true,
     "seed": 42,
     "hidden_channels": 64,
     "kernel_size": 7,

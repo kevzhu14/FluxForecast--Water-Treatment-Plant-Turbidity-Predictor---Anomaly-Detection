@@ -40,6 +40,16 @@ class TCNRegressor(nn.Module):
         use_norm: str = "weight_norm"
     ):
         super().__init__()
+        
+        self.num_features = num_features
+        self.channels = channels
+        self.kernel_size = kernel_size
+        self.dropout = dropout
+        self.fc_hidden = fc_hidden
+        self.dilations = dilations
+        self.dilation_reset = dilation_reset
+        self.use_norm = use_norm
+        self.use_skip_connections = True
 
         self.tcn = TCN(
             num_inputs=num_features,
@@ -74,6 +84,9 @@ class TCNRegressor(nn.Module):
             "kernel_size": self.kernel_size,
             "dropout": self.dropout,
             "fc_hidden": self.fc_hidden,
+            "dilations": self.dilations,
+            "dilation_reset": self.dilation_reset,
+            "use_norm": self.use_norm,
         }
 
 

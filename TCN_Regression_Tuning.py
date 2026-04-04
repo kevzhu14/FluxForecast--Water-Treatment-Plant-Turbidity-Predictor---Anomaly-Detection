@@ -155,19 +155,14 @@ def TrainModelTCNRegression(
 
 
 def TuneTCN(
-        X_train,
-        y_train,
-        X_val,
-        y_val,
-        search_space,
-        n_trials=1,
-        epochs=200,
-        patience=20,
-        seed=42
+        X_train, y_train, X_val, y_val,
+        search_space, n_trials=1, epochs=200, patience=20, seed=42
     ):
         best_rmse = float("inf")
+        best_r2 = None
         best_params = None
         best_model = None
+        best_history = None
         all_trials = []
 
         for trial in range(n_trials):
@@ -183,21 +178,22 @@ def TuneTCN(
                 "use_norm": random.choice(search_space["use_norm"]),
             }
 
-            print("\n==============================")
+            print(f"\n==============================")
             print(f"Trial {trial+1}/{n_trials}")
             print(params)
 
             model, history = TrainModelTCNRegression(
-                X_train=X_train,
-                y_train=y_train,
-                X_val=X_val,
-                y_val=y_val,
+                X_train=X_train, y_train=y_train,
+                X_val=X_val, y_val=y_val,
                 batch_size=params["batch_size"],
                 lr=params["lr"],
                 channels=params["channels"],
                 kernel_size=params["kernel_size"],
                 dropout=params["dropout"],
                 fc_hidden=params["fc_hidden"],
+                weight_decay=params["weight_decay"],
+                dilation_reset=params["dilation_reset"],
+                use_norm=params["use_norm"],
                 epochs=epochs,
                 patience=patience,
                 seed=seed
@@ -205,30 +201,28 @@ def TuneTCN(
 
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             val_loader = DataLoader(WindowDataset(X_val, y_val), batch_size=128, shuffle=False)
-
             y_true_val, y_pred_val = EvaluateTCN(model, val_loader, device)
             metrics = RegressionMetrics(y_true_val, y_pred_val, "Val", "TCN")
 
-            r2 = metrics["R2"]
             rmse = metrics["RMSE"]
+            r2 = metrics["R2"]
 
-        all_trials.append({
-            "trial": trial + 1,
-            **params,
-            "val_rmse": rmse,
-            "val_mae": metrics["MAE"],
-            "val_mse": metrics["MSE"],
-            "val_mape": metrics["MAPE"],
-            "val_r2": r2
-        })
+            all_trials.append({
+                "trial": trial + 1,
+                **params,
+                "val_rmse": rmse,
+                "val_mae": metrics["MAE"],
+                "val_mse": metrics["MSE"],
+                "val_mape": metrics["MAPE"],
+                "val_r2": r2
+            })
 
-        # Use rmse as metric, pass other metrics for analysis
-        if rmse < best_rmse:
-            best_rmse = rmse
-            best_r2 = r2
-            best_params = params
-            best_model = model
-            best_history = history
+            if rmse < best_rmse:
+                best_rmse = rmse
+                best_r2 = r2
+                best_params = params
+                best_model = model
+                best_history = history
 
         print("\n==============================")
         print("BEST RESULT")
@@ -247,7 +241,7 @@ def TuneTCN(
 
 def main():
     # Find the best hyperparameters for TCN, varying window sizes and shift steps
-    window_sizes = [3, 7, 14, 21]   
+    window_sizes = [3, 7, 14, 21]
     shift_steps = [1, 3, 7]
 
     search_space = {
@@ -298,8 +292,6 @@ def main():
             X_val_seq,   y_val   = WindowsToNmp(val_data)
             X_test_seq,  y_test  = WindowsToNmp(test_data)
             X_train_seq, X_val_seq, X_test_seq, scaler = NormalizeStd(X_train_seq,X_val_seq,X_test_seq)
-
-            print(f"Running window_size={window_size}, shift_step={shift_step} ...")
             
             TCN_results = TuneTCN(
                     X_train_seq,
@@ -316,6 +308,7 @@ def main():
             all_results.append({
                 "window_size": window_size,
                 "shift_step": shift_step,
+                "scaler": scaler,
                 "best_model": TCN_results["best_model"],
                 "best_rmse": TCN_results["best_rmse"],
                 "best_r2": TCN_results["best_r2"],
@@ -340,7 +333,7 @@ def main():
 
     # Save all results to a CSV for further analysis
     results_df = pd.DataFrame(all_results_sorted)
-    results_df.drop(columns=["best_model", "best_history"]).to_csv(os.path.join(data_folder, "tcn_tuning_results.csv"), index=False)
+    results_df.drop(columns=["best_model", "best_history", "scaler"]).to_csv(os.path.join(data_folder, "tcn_tuning_results.csv"), index=False)
     print(f"All tuning results saved to {os.path.join(data_folder, 'tcn_tuning_results.csv')}")
 
     #Plot best RMSE for each window size and shift step

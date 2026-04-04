@@ -1,9 +1,9 @@
 ==============================
 Model: tcn
 Task: regression
-MAE      : 0.0107
+MAE      : 0.0118
 MSE      : 0.0003
-RMSE     : 0.0169
-R2       : 0.5414
-Max Error: 0.0870
-MAPE     : 0.1795
+RMSE     : 0.0170
+R2       : 0.5387
+Max Error: 0.0817
+MAPE     : 0.2003

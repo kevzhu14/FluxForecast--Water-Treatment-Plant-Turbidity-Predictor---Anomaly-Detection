@@ -1,1 +1,1 @@
-{"framework": "pytorch", "model_class": "TCNRegressor", "extra": {"window": 3, "shift": 7}}
+{"framework": "pytorch", "model_class": "TCNRegressor", "extra": {"window": 14, "shift": 7}}
