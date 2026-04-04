@@ -22,6 +22,7 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve,
 from TCNClassifier import (TCNClassifier, TrainModelTCNClassifier)
 from TCNRegression import (TCNRegressor, TrainModelTCNRegression)
 import json
+from Model_Comparison import load_CNN_model, load_TCN_model
 
 SEED = 42
 
@@ -50,6 +51,14 @@ def PrepareData(config, df):
     target_col = config["target_col"]
 
     train_raw, val_raw, test_raw = DataSplit(df)
+
+    if config["use_pretrained"]:
+        window_size = 14
+        shift_step = 7
+        if model_type in ["cnn", "tcn"]:
+            drop_nans = True
+        else: drop_nans = False
+
     if drop_nans:
         drop_cols = DropNaNCols(train_raw)
         train_raw, val_raw, test_raw = [ApplyNaNDrop(x, drop_cols) for x in (train_raw, val_raw, test_raw)]
@@ -86,6 +95,8 @@ def PrepareData(config, df):
 def BuildModel(config, input_shape=None):
     model_type = config["model_type"]
     task = config.get("task", "classification")
+    use_pretrained = config.get("use_pretrained", False)
+
     if model_type == "naive":
         return None 
     elif model_type == "xgboost":
@@ -103,7 +114,7 @@ def BuildModel(config, input_shape=None):
                 eval_metric=["logloss", "auc"]
             )
         elif task == "regression":
-            if config["window_size"] == 14 and config["shift_step"] == 7:
+            if use_pretrained:
                 # Load optimized model for w14_s7
                 model_dir = os.path.join(MODELS_FOLDER, "Optimized_XGBoost")
                 model = xgb.XGBRegressor()
@@ -121,7 +132,6 @@ def BuildModel(config, input_shape=None):
                     objective="reg:squarederror",
                     eval_metric="rmse"
                 )
-            
             return model
                         
     elif model_type == "cnn":
@@ -135,12 +145,18 @@ def BuildModel(config, input_shape=None):
                 dropout=0.2
             )
         elif task == "regression":
-            return CNN1DRegressor(
-                num_features=input_shape[2],
-                hidden_channels=64,
-                kernel_size=3,
-                dropout=0.2
-            )
+            if use_pretrained:
+                # Load optimized model for w14_s7
+                model_dir = os.path.join(MODELS_FOLDER, "Optimized_CNN")
+                model = load_CNN_model(model_dir)
+            else:
+                model = CNN1DRegressor(
+                    num_features=input_shape[2],
+                    hidden_channels=64,
+                    kernel_size=3,
+                    dropout=0.2
+                )
+            return model
     elif model_type == "tcn":
         if input_shape is None:
             raise ValueError("input_shape is required for tcn")
@@ -152,12 +168,18 @@ def BuildModel(config, input_shape=None):
                 dropout=config.get("dropout", 0.2)
             )
         elif task == "regression":
-            return TCNRegressor(
+            if use_pretrained:
+                # Load optimized model for w14_s7
+                model_dir = os.path.join(MODELS_FOLDER, "Optimized_TCN")
+                model = load_TCN_model(model_dir)
+            else:
+                model = TCNRegressor(
                 num_features=input_shape[2],
                 channels=config.get("channels", [32, 32, 32]),
                 kernel_size=config.get("kernel_size", 3),
                 dropout=config.get("dropout", 0.2)
-            )
+                )
+            return model
     else:
         raise ValueError(f"Unknown model_type: {model_type}")    
 
@@ -166,6 +188,7 @@ def TrainAndPredict(model, data, config):
     task = config.get("task", "classification")
     target_col = config["target_col"]
     threshold = config.get("threshold", None)
+    use_pretrained = config.get("use_pretrained", False)
 
     X_train, y_train = data["X_train"], data["y_train"]
     X_val, y_val     = data["X_val"], data["y_val"]
@@ -194,12 +217,14 @@ def TrainAndPredict(model, data, config):
         else:
             raise ValueError("task must be 'classification' or 'regression'")
     elif model_type == "xgboost":
-        model.fit(
-            X_train,
-            y_train,
-            eval_set=[(X_val, y_val)],
-            verbose=False
-        )
+        if not use_pretrained:
+            # Train model if not loading optimized version
+            model.fit(
+                X_train,
+                y_train,
+                eval_set=[(X_val, y_val)],
+                verbose=False
+            )
         if task == "classification":
             y_prob = model.predict_proba(X_test)[:, 1]
             y_pred = (y_prob >= config.get("prob_threshold", 0.5)).astype(np.float32)
@@ -246,20 +271,22 @@ def TrainAndPredict(model, data, config):
                 "y_pred": y_pred
             }
         elif task == "regression":
-            model = TrainModelCNNRegression(
-                X_train=X_train,
-                y_train=y_train,
-                X_val=X_val,
-                y_val=y_val,
-                batch_size=config.get("batch_size", 64),
-                lr=config.get("lr", 1e-3),
-                epochs=config.get("epochs", 100),
-                patience=config.get("patience", 15),
-                hidden_channels=config.get("hidden_channels", 64),
-                kernel_size=config.get("kernel_size", 3),
-                dropout=config.get("dropout", 0.2),
-                seed=config.get("seed", 42)
-            )
+            if not use_pretrained:
+                # Train model if not loading optimized version
+                model = TrainModelCNNRegression(
+                    X_train=X_train,
+                    y_train=y_train,
+                    X_val=X_val,
+                    y_val=y_val,
+                    batch_size=config.get("batch_size", 64),
+                    lr=config.get("lr", 1e-3),
+                    epochs=config.get("epochs", 100),
+                    patience=config.get("patience", 15),
+                    hidden_channels=config.get("hidden_channels", 64),
+                    kernel_size=config.get("kernel_size", 3),
+                    dropout=config.get("dropout", 0.2),
+                    seed=config.get("seed", 42)
+                )
             y_pred = TorchPredict(model, X_test, task="regression")
             return {
                 "model": model,
@@ -292,25 +319,26 @@ def TrainAndPredict(model, data, config):
                 "y_pred": y_pred
             }
         elif task == "regression":
-            model = TrainModelTCNRegression(
-                X_train=X_train,
-                y_train=y_train,
-                X_val=X_val,
-                y_val=y_val,
-                batch_size=config.get("batch_size", 64),
-                lr=config.get("lr", 1e-3),
-                epochs=config.get("epochs", 100),
-                patience=config.get("patience", 15),
-                channels=config.get("channels", [32, 32, 32]),
-                kernel_size=config.get("kernel_size", 3),
-                dropout=config.get("dropout", 0.2),
-                fc_hidden=config.get("fc_hidden", 32),
-                dilation_reset=config.get("dilation_reset", None),
-                use_norm=config.get("use_norm", "weight_norm"),
-                weight_decay=config.get("weight_decay", 0.0),
-                seed=config.get("seed", 42)
-            )
-
+            if not use_pretrained:
+                # Train model if not loading optimized version
+                model = TrainModelTCNRegression(
+                    X_train=X_train,
+                    y_train=y_train,
+                    X_val=X_val,
+                    y_val=y_val,
+                    batch_size=config.get("batch_size", 64),
+                    lr=config.get("lr", 1e-3),
+                    epochs=config.get("epochs", 100),
+                    patience=config.get("patience", 15),
+                    channels=config.get("channels", [32, 32, 32]),
+                    kernel_size=config.get("kernel_size", 3),
+                    dropout=config.get("dropout", 0.2),
+                    fc_hidden=config.get("fc_hidden", 32),
+                    dilation_reset=config.get("dilation_reset", None),
+                    use_norm=config.get("use_norm", "weight_norm"),
+                    weight_decay=config.get("weight_decay", 0.0),
+                    seed=config.get("seed", 42)
+                )
             y_pred = TorchPredict(model, X_test, task="regression")
 
             return {
@@ -385,6 +413,7 @@ def MakeRunDirs(config, base_dir="results"):
         "plots_dir": plots_dir,
         "run_name": run_name
     }
+
 def SaveMetricsCSV(metrics, config, run_paths):
     row = {
         "model_type": config["model_type"],
@@ -414,11 +443,13 @@ def SavePredictionsCSV(results, run_paths):
     save_path = os.path.join(run_paths["run_dir"], "predictions.csv")
     df.to_csv(save_path, index=False)
     return save_path
+
 def SaveConfig(config, run_paths):
     save_path = os.path.join(run_paths["run_dir"], "config.json")
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=4)
     return save_path
+
 def DisplayResults(results, metrics, config, run_paths=None):
     model_type = config["model_type"]
     task = config.get("task", "classification")
@@ -451,6 +482,7 @@ def DisplayResults(results, metrics, config, run_paths=None):
         txt_path = os.path.join(run_paths["run_dir"], "summary.txt")
         with open(txt_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
+            
 def PlotResults(results, metrics, config, run_paths):
     model_type = config["model_type"]
     task = config.get("task", "classification")

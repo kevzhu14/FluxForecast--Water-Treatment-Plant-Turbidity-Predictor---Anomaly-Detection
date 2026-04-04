@@ -35,6 +35,7 @@ CONFIG = {
     "shift_step": SHIFT_STEP,
     "model_type": "xgboost",          # "naive", "xgboost", "cnn", "tcn"
     "prob_threshold": 0.5,
+    "use_pretrained": True,
     "seed": SEED
 }
 
@@ -94,6 +95,7 @@ def SaveModelMetricFigure(pipeline_outputs, save_dir=FIGURES_FOLDER):
         ax.grid(axis="x", linestyle="--", alpha=0.6)
 
     fig.suptitle("Model Comparison on Test Set", fontsize=16)
+    fig.text(0.512, 0.85, f"Window Size: {CONFIG['window_size']}, Shift Step: {CONFIG['shift_step']}", ha='center', fontsize=14)
     fig.tight_layout(rect=[0, 0, 1, 0.95])
 
     save_path = os.path.join(save_dir, "model_metric_comparison.png")

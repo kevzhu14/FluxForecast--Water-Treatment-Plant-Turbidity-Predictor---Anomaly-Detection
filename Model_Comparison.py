@@ -3,6 +3,7 @@ import numpy as np
 import random
 import os
 import json
+import joblib
 import matplotlib.pyplot as plt
 from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score, r2_score,
                              mean_absolute_error, mean_squared_error, max_error, mean_absolute_percentage_error)
@@ -155,10 +156,9 @@ def load_TCN_model(load_dir):
 
     return model
 
-models = load_saved_models()
-
 
 def main():
+    models = load_saved_models()
     for name, data in models.items():
         print(name)
         print("Framework:", data["framework"])
