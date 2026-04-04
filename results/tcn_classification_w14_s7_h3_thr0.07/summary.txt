@@ -1,0 +1,8 @@
+==============================
+Model: tcn
+Task: classification
+Accuracy : 0.8252
+Precision: 0.5217
+Recall   : 0.6316
+F1       : 0.5714
+AUC      : 0.8233

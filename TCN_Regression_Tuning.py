@@ -6,7 +6,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import torchmetrics.functional as tmf
-from DataProcessingFinal import DataSplit, SlidingWindowWithTarget, WindowsToNmp, DataProcessing, NormalizeStd, DropNaNCols, ApplyNaNDrop, WindowDataset, save_NN_model
+from TCNRegression import TCNRegressor, RegressionMetrics, EvaluateTCN
+from DataProcessing import DataSplit, SlidingWindowWithTarget, WindowsToNmp, DataProcessing, NormalizeStd, DropNaNCols, ApplyNaNDrop, WindowDataset, save_NN_model
 import matplotlib.pyplot as plt
 from pytorch_tcn import TCN
 
@@ -24,96 +25,6 @@ figures_folder = os.path.join('figures', 'tcn_results')
 models_folder = 'saved_models'
 
 
-class TCNRegressor(nn.Module):
-    def __init__(
-        self,
-        num_features: int,
-        channels=(32, 32, 32),
-        kernel_size: int = 3,
-        dropout: float = 0.2,
-        fc_hidden: int = 32
-    ):
-        super().__init__()
-
-        self.num_features = num_features
-        self.channels = tuple(channels)
-        self.kernel_size = kernel_size
-        self.dropout = dropout
-        self.fc_hidden = fc_hidden
-
-        self.tcn = TCN(
-            num_inputs=num_features,
-            num_channels=list(channels),
-            kernel_size=kernel_size,
-            dropout=dropout,
-        )
-
-        self.head = nn.Sequential(
-            nn.Linear(channels[-1], fc_hidden),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(fc_hidden, 1),
-            nn.Softplus()
-        )
-
-    def forward(self, x):
-        x = x.transpose(1, 2)  
-        x = self.tcn(x)         
-        x = x[:, :, -1]        
-        x = self.head(x)      
-        return x.squeeze(-1)
-
-    def get_config(self):
-        return {
-            "num_features": self.num_features,
-            "channels": self.channels,
-            "kernel_size": self.kernel_size,
-            "dropout": self.dropout,
-            "fc_hidden": self.fc_hidden,
-        }
-
-
-def RegressionMetrics(y_true, y_pred, split_name, model_name, epoch=None):
-    y_true = y_true.detach().cpu()
-    y_pred = y_pred.detach().cpu()
-
-    mae  = tmf.mean_absolute_error(y_pred, y_true).item()
-    mse  = tmf.mean_squared_error(y_pred, y_true).item()
-    rmse = tmf.mean_squared_error(y_pred, y_true, squared=False).item()
-    mape = tmf.mean_absolute_percentage_error(y_pred, y_true).item()
-    r2   = tmf.r2_score(y_pred, y_true).item()
-
-    max_error = torch.max(torch.abs(y_true - y_pred)).item()
-
-    res = {
-        "Model": model_name,
-        "Split": split_name,
-        "MAE": mae,
-        "MSE": mse,
-        "RMSE": rmse,
-        "MAPE": mape,
-        "R2": r2,
-        "MaxError": max_error
-    }
-    if epoch is not None:
-        res["Epoch"] = epoch
-    return res
-
-
-@torch.no_grad()
-def EvaluateTCN(model, loader, device):
-    model.eval()
-    ys, preds = [], []
-    for Xb, yb in loader:
-        Xb = Xb.to(device)
-        pb = model(Xb)
-        ys.append(yb.cpu())
-        preds.append(pb.cpu())
-    y_all = torch.cat(ys)
-    p_all = torch.cat(preds)
-    return y_all, p_all
-
-
 def TrainModelTCNRegression(
     X_train: np.ndarray,
     y_train: np.ndarray,
@@ -127,6 +38,10 @@ def TrainModelTCNRegression(
     kernel_size=3,
     dropout: float = 0.2,
     fc_hidden: int = 32,
+    dilations=None,
+    dilation_reset=None,
+    use_norm: str = "weight_norm",
+    weight_decay: float = 0.0,
     seed: int = 42
 ):
     torch.manual_seed(seed)
@@ -146,10 +61,13 @@ def TrainModelTCNRegression(
         channels=channels,
         kernel_size=kernel_size,
         dropout=dropout,
-        fc_hidden=fc_hidden
+        fc_hidden=fc_hidden,
+        dilations=dilations,
+        dilation_reset=dilation_reset,
+        use_norm=use_norm
     ).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_fn = nn.MSELoss()
 
     best_val_rmse = float("inf")
@@ -245,7 +163,7 @@ def TuneTCN(
         n_trials=1,
         epochs=200,
         patience=20,
-        seed=SEED
+        seed=42
     ):
         best_rmse = float("inf")
         best_params = None
@@ -260,6 +178,9 @@ def TuneTCN(
                 "lr": random.choice(search_space["lr"]),
                 "batch_size": random.choice(search_space["batch_size"]),
                 "fc_hidden": random.choice(search_space["fc_hidden"]),
+                "weight_decay": random.choice(search_space["weight_decay"]),
+                "dilation_reset": random.choice(search_space["dilation_reset"]),
+                "use_norm": random.choice(search_space["use_norm"]),
             }
 
             print("\n==============================")
@@ -331,17 +252,25 @@ def main():
 
     search_space = {
         "channels": [
+            (16, 16),
             (16, 16, 16),
+            (32, 32),
             (32, 32, 32),
+            (64, 64),
             (64, 64, 64),
+            (16, 32, 64),
+            (32, 32, 64),
             (32, 64, 64),
-            (32, 64, 128)
+            (32, 64, 128),
         ],
-        "kernel_size": [2, 3, 5],
-        "dropout": [0.0, 0.1, 0.2, 0.3],
-        "lr": [1e-4, 3e-4, 1e-3],
-        "batch_size": [16, 32, 64],
-        "fc_hidden": [16, 32, 64]
+        "kernel_size": [2, 3, 5, 7],
+        "dropout": [0.0, 0.1, 0.2, 0.3, 0.4],
+        "lr": [1e-4, 3e-4, 1e-3, 3e-3],
+        "batch_size": [16, 32, 64, 128],
+        "fc_hidden": [16, 32, 64, 128],
+        "weight_decay": [0.0, 1e-6, 1e-5, 1e-4, 1e-3],
+        "use_norm": ["weight_norm", "batch_norm", "layer_norm", None],
+        "dilation_reset": [None, 4, 8, 16],
     }
 
     train_raw, val_raw, test_raw = DataSplit(os.path.join(data_folder, "WTP_raw_data.csv"))

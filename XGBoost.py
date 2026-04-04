@@ -7,7 +7,7 @@ import random
 from sklearn.metrics import r2_score, mean_squared_error
 import xgboost as xgb
 import torch
-from DataProcessingFinal import DataSplit, DataPrep,RegressionMetrics
+from DataProcessing import DataSplit, DataPrep,RegressionMetrics
 from Naive import NaivePredRegression
 
 
@@ -42,7 +42,7 @@ def BaseModel():
         eval_metric=["mae", "rmse"],
     )
 
-def Evaluate(model,train_raw, val_raw, test_raw, window_size, shift_step):
+def EvaluateXG(model,train_raw, val_raw, test_raw, window_size, shift_step):
     train_data, val_data, test_data, X_train, y_train, X_val, y_val, X_test, y_test = DataPrep(
         train_raw, val_raw, test_raw, window_size, shift_step
     )
@@ -169,7 +169,7 @@ def main():
             if shift_step > window_size:
                 continue
             print(f"Running window_size={window_size}, shift_step={shift_step} ...")
-            result = Evaluate(BaseModel(), train_raw, val_raw, test_raw, window_size, shift_step)
+            result = EvaluateXG(BaseModel(), train_raw, val_raw, test_raw, window_size, shift_step)
             all_results.append(result)
 
     results_df = pd.DataFrame([

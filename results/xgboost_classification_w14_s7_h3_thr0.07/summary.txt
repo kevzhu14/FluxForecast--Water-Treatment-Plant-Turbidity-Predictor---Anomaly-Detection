@@ -1,0 +1,8 @@
+==============================
+Model: xgboost
+Task: classification
+Accuracy : 0.9320
+Precision: 1.0000
+Recall   : 0.6316
+F1       : 0.7742
+AUC      : 0.8891

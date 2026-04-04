@@ -1,0 +1,9 @@
+==============================
+Model: xgboost
+Task: regression
+MAE      : 0.0083
+MSE      : 0.0002
+RMSE     : 0.0136
+R2       : 0.7023
+Max Error: 0.0787
+MAPE     : 0.1367

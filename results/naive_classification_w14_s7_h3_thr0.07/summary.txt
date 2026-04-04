@@ -1,0 +1,7 @@
+==============================
+Model: naive
+Task: classification
+Accuracy : 0.9417
+Precision: 1.0000
+Recall   : 0.6842
+F1       : 0.8125

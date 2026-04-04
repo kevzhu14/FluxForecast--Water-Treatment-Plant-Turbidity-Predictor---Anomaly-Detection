@@ -1,0 +1,9 @@
+==============================
+Model: naive
+Task: regression
+MAE      : 0.0069
+MSE      : 0.0001
+RMSE     : 0.0113
+R2       : 0.7967
+Max Error: 0.0500
+MAPE     : 0.1178

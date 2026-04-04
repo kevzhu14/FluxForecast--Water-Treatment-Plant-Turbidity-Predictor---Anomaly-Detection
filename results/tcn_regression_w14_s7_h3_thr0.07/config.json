@@ -1,0 +1,24 @@
+{
+    "task": "regression",
+    "target_col": "[Filt] Mean Turbidity [NTU]",
+    "threshold": 0.07,
+    "horizon": 3,
+    "window_size": 14,
+    "shift_step": 7,
+    "model_type": "tcn",
+    "prob_threshold": 0.5,
+    "seed": 42,
+    "channels": [
+        32,
+        64,
+        128
+    ],
+    "kernel_size": 5,
+    "dropout": 0.0,
+    "lr": 0.003,
+    "batch_size": 16,
+    "fc_hidden": 128,
+    "weight_decay": 0.0,
+    "dilation_reset": 8,
+    "use_norm": "layer_norm"
+}

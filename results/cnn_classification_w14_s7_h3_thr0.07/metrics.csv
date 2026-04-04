@@ -1,0 +1,2 @@
+model_type,task,window_size,shift_step,horizon,threshold,prob_threshold,accuracy,precision,recall,f1,auc
+cnn,classification,14,7,3,0.07,0.5,0.8349514563106796,0.5454545454545454,0.631578947368421,0.5853658536585366,0.8558897243107769

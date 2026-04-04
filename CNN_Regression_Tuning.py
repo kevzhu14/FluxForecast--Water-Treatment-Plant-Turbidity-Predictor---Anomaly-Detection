@@ -10,7 +10,8 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torchmetrics.functional as tmf
 from sklearn.preprocessing import StandardScaler
-from DataProcessingFinal import DataSplit, SlidingWindowWithTarget, WindowsToNmp, DataProcessing, NormalizeStd, DropNaNCols, ApplyNaNDrop, WindowDataset, save_NN_model
+from CNNRegression import CNN1DRegressor, RegressionMetrics, EvaluateCNN
+from DataProcessing import DataSplit, SlidingWindowWithTarget, WindowsToNmp, DataProcessing, NormalizeStd, DropNaNCols, ApplyNaNDrop, WindowDataset, save_NN_model
 import matplotlib.pyplot as plt
 
 
@@ -25,85 +26,6 @@ torch.cuda.manual_seed_all(SEED)
 data_folder = 'data'
 figures_folder = os.path.join('figures', 'cnn_results')
 models_folder = 'saved_models'  
-
-
-class CNN1DRegressor(nn.Module):       
-    def __init__(self, num_features: int, hidden_channels: int = 64, kernel_size: int = 3, dropout: float = 0.2):
-        super().__init__()
-
-        padding = kernel_size // 2
-
-        self.net = nn.Sequential(
-            nn.Conv1d(in_channels=num_features, out_channels=hidden_channels, kernel_size=kernel_size, padding=padding),
-            nn.ReLU(),
-            nn.Conv1d(in_channels=hidden_channels, out_channels=hidden_channels, kernel_size=kernel_size, padding=padding),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.AdaptiveAvgPool1d(1),
-        )
-
-        self.head = nn.Sequential(
-            nn.Flatten(),                 
-            nn.Linear(hidden_channels, 32),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(32, 1)              
-        )
-
-    def forward(self, x):
-        x = x.transpose(1, 2)
-        x = self.net(x)
-        x = self.head(x)
-        return x.squeeze(-1)
-    
-    def get_config(self):
-        return {
-            "num_features": self.net[0].in_channels,
-            "hidden_channels": self.net[0].out_channels,
-            "kernel_size": self.net[0].kernel_size[0],
-            "dropout": self.net[4].p
-        }
-
-
-def RegressionMetrics(y_true, y_pred, split_name, model_name, epoch=None):
-    y_true = y_true.detach().cpu()
-    y_pred = y_pred.detach().cpu()
-
-    mae  = tmf.mean_absolute_error(y_pred, y_true).item()
-    mse  = tmf.mean_squared_error(y_pred, y_true).item()
-    rmse = tmf.mean_squared_error(y_pred, y_true, squared=False).item()
-    mape = tmf.mean_absolute_percentage_error(y_pred, y_true).item()
-    r2   = tmf.r2_score(y_pred, y_true).item()
-
-    max_error = torch.max(torch.abs(y_true - y_pred)).item()
-
-    res = {
-        "Model": model_name,
-        "Split": split_name,
-        "MAE": mae,
-        "MSE": mse,
-        "RMSE": rmse,
-        "MAPE": mape,
-        "R2": r2,
-        "MaxError": max_error
-    }
-    if epoch is not None:
-        res["Epoch"] = epoch
-    return res
-
-
-@torch.no_grad()
-def EvaluateCNN(model, loader, device):
-    model.eval()
-    ys, preds = [], []
-    for Xb, yb in loader:
-        Xb = Xb.to(device)
-        pb = model(Xb)
-        ys.append(yb.cpu())
-        preds.append(pb.cpu())
-    y_all = torch.cat(ys)
-    p_all = torch.cat(preds)
-    return y_all, p_all
 
 
 def TrainModelCNNRegression(

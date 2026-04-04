@@ -1,0 +1,2 @@
+model_type,task,window_size,shift_step,horizon,threshold,prob_threshold,accuracy,precision,recall,f1,auc
+xgboost,classification,14,7,3,0.07,0.5,0.9320388349514563,1.0,0.631578947368421,0.7741935483870968,0.8890977443609024

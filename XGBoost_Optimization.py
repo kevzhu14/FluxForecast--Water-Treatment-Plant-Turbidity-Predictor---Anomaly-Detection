@@ -1,3 +1,4 @@
+import json
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -6,8 +7,8 @@ import random
 from sklearn.metrics import r2_score,mean_absolute_error, mean_squared_error 
 import xgboost as xgb
 import torch
-from DataProcessingFinal import DataSplit, DataPrep
-from XGBoost import Evaluate, plot_best_model, save_xgb_model
+from DataProcessing import DataSplit
+from XGBoost import EvaluateXG, plot_best_model, DataPrep
 from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
 
 
@@ -25,6 +26,25 @@ models_folder = 'saved_models'
 
 target_col = "[Filt] Mean Turbidity [NTU]"
 
+def save_xgb_model(model, config, extra_params, save_dir):
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Save model
+    model.save_model(os.path.join(save_dir, "model.json"))
+
+    # Save config
+    with open(os.path.join(save_dir, "config.json"), "w") as f:
+        json.dump(config, f)
+
+    # Save metadata + extra params
+    metadata = {
+        "framework": "xgboost",
+        "model_class": model.__class__.__name__,
+        "extra": extra_params or {}
+    }
+
+    with open(os.path.join(save_dir, "metadata.json"), "w") as f:
+        json.dump(metadata, f)
 
 def main():
     # Extract best result from baseline to compare against optimized model
@@ -126,7 +146,7 @@ def main():
         early_stopping_rounds=15
     )
 
-    optimized_results = Evaluate(xgb_optimized_model, train_raw, val_raw, test_raw, window_size, shift_step)
+    optimized_results = EvaluateXG(xgb_optimized_model, train_raw, val_raw, test_raw, window_size, shift_step)
 
     saved_hparameters_df = pd.DataFrame({
         'Hyperparameter': ['n_estimators', 'max_depth', 'learning_rate', 'subsample', 'colsample_bytree', 'reg_lambda', 'reg_alpha', 'gamma', 'min_child_weight', 'early_stopping_rounds'],

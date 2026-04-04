@@ -1,0 +1,8 @@
+==============================
+Model: cnn
+Task: classification
+Accuracy : 0.8350
+Precision: 0.5455
+Recall   : 0.6316
+F1       : 0.5854
+AUC      : 0.8559
