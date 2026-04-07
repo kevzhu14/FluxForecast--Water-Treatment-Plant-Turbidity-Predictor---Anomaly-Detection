@@ -27,15 +27,15 @@ FIGURES_FOLDER = os.path.join('figures', 'comparisons')
 MODELS_FOLDER = 'saved_models'
 
 CONFIG = {
-    "task": "regression",          # "regression" or "classification"
-    "target_col": TARGET_COL,  # 
+    "task": "classification",          # "regression" or "classification"
+    "target_col": TARGET_COL,
     "threshold": 0.07,
     "horizon": 3,
     "window_size": WINDOW_SIZE,
     "shift_step": SHIFT_STEP,
     "model_type": "xgboost",          # "naive", "xgboost", "cnn", "tcn"
     "prob_threshold": 0.5,
-    "use_pretrained": True,
+    "use_pretrained": False,
     "seed": SEED
 }
 
@@ -70,22 +70,35 @@ def RunPipeline(config, df):
         "paths": run_paths
     }
 
-def SaveModelMetricFigure(pipeline_outputs, save_dir=FIGURES_FOLDER):
+def SaveModelMetricFigure(pipeline_outputs, task, save_dir=FIGURES_FOLDER):
     os.makedirs(save_dir, exist_ok=True)
     rows = []
-    for model_name, out in pipeline_outputs.items():
-        m = out["metrics"]
-        rows.append({
-            "Model": model_name,
-            "R2": m["r2"],
-            "MAE": m["mae"],
-            "MAPE": m["mape"],
-            "RMSE": m["rmse"]
-        })
+
+    if task == "regression":
+        metric_info = ["R2", "RMSE"]
+        for model_name, out in pipeline_outputs.items():
+            m = out["metrics"]
+            rows.append({
+                "Model": model_name,
+                "R2": m["r2"],
+                "MAE": m["mae"],
+                "MAPE": m["mape"],
+                "RMSE": m["rmse"]
+            })
+    elif task == "classification":
+        metric_info = ["Recall", "F1"]
+        for model_name, out in pipeline_outputs.items():
+            m = out["metrics"]
+            rows.append({
+                "Model": model_name,
+                "Accuracy": m["accuracy"],
+                "Precision": m["precision"],
+                "Recall": m["recall"],
+                "F1": m["f1"]
+            })
     df = pd.DataFrame(rows)
     df["Model"] = pd.Categorical(df["Model"], categories=order, ordered=True)
     df = df.sort_values("Model")
-    metric_info = ["R2", "RMSE"]
     fig, axes = plt.subplots(1, 2, figsize=(15, 4))
     for ax, metric in zip(axes, metric_info):
         bar_colors = [MODEL_STYLES[m]["color"] for m in df["Model"]]
@@ -94,11 +107,11 @@ def SaveModelMetricFigure(pipeline_outputs, save_dir=FIGURES_FOLDER):
         ax.set_xlabel(metric)
         ax.grid(axis="x", linestyle="--", alpha=0.6)
 
-    fig.suptitle("Model Comparison on Test Set", fontsize=16)
+    fig.suptitle(f"{task.capitalize()} Comparison on Test Set", fontsize=16)
     fig.text(0.512, 0.85, f"Window Size: {CONFIG['window_size']}, Shift Step: {CONFIG['shift_step']}", ha='center', fontsize=14)
     fig.tight_layout(rect=[0, 0, 1, 0.95])
 
-    save_path = os.path.join(save_dir, "model_metric_comparison.png")
+    save_path = os.path.join(save_dir, f"{task}_model_metric_comparison.png")
     fig.savefig(save_path, dpi=300)
     plt.close(fig)
     print(f"Saved figure to: {save_path}")
@@ -266,7 +279,6 @@ outputs = {}
 for m in models:
 
     config = CONFIG.copy()
-    config["target_col"] = "[Filt] Mean Turbidity [NTU]" # [Filt] Max Turbidity [NTU] #[Filt] Mean Turbidity [NTU]  #[TW] Al [mg/L]
     config["model_type"] = m
 
     if m == "cnn":
@@ -276,11 +288,8 @@ for m in models:
 
     outputs[m] = RunPipeline(config, os.path.join(DATA_FOLDER, 'WTP_raw_data.csv'))
 
-
-## IF REGRESSION 
-PlotPredictedVsActual(outputs)
-SaveModelMetricFigure(outputs)
-## IF CLASSIFICATION 
-#PlotClassificationComparison(outputs)
-
-
+if config["task"] == "regression":
+    PlotPredictedVsActual(outputs)
+elif config["task"] == "classification":
+    PlotClassificationComparison(outputs)
+SaveModelMetricFigure(outputs, config["task"])

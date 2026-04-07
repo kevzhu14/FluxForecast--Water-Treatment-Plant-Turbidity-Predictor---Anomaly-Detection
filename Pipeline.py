@@ -149,6 +149,7 @@ def BuildModel(config, input_shape=None):
                 # Load optimized model for w14_s7
                 model_dir = os.path.join(MODELS_FOLDER, "Optimized_CNN")
                 model = load_CNN_model(model_dir)
+                model.eval()
             else:
                 model = CNN1DRegressor(
                     num_features=input_shape[2],
@@ -172,6 +173,7 @@ def BuildModel(config, input_shape=None):
                 # Load optimized model for w14_s7
                 model_dir = os.path.join(MODELS_FOLDER, "Optimized_TCN")
                 model = load_TCN_model(model_dir)
+                model.eval()
             else:
                 model = TCNRegressor(
                 num_features=input_shape[2],

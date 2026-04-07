@@ -1,1 +1,1 @@
-{"num_features": 63, "hidden_channels": 16, "kernel_size": 5, "dropout": 0.2}
+{"num_features": 63, "hidden_channels": 64, "kernel_size": 7, "dropout": 0.1}
