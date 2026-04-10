@@ -445,4 +445,3 @@ def main():
     print(f"Test Max Error: {test_metrics['MaxError']:.4f}")   
 if __name__ == "__main__":
     main()
-# Best parameters: {'channels': (16, 16, 16), 'kernel_size': 5, 'dropout': 0.1, 'lr': 0.001, 'batch_size': 64, 'fc_hidden': 16

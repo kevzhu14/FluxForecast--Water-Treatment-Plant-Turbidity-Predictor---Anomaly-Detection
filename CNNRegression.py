@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import random
+import os
 from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score,
                              mean_absolute_error, mean_squared_error, max_error, mean_absolute_percentage_error)
 from sklearn.metrics import r2_score
@@ -12,7 +13,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torchmetrics.functional as tmf
 from sklearn.preprocessing import StandardScaler
-from DataProcessing import WindowDataset, DataSplit, SlidingWindowWithTarget, WindowsToNmp, DataProcessing, NormalizeStd, DropNaNCols, ApplyNaNDrop
+from DataProcessing import WindowDataset, DataSplit, SlidingWindowWithTarget, WindowsToNmp, DataProcessing, NormalizeStd, DropNaNCols, ApplyNaNDrop, save_NN_model
 import matplotlib.pyplot as plt
 
 
@@ -334,9 +335,9 @@ def TuneCNN(
 
 def main():
     window_size=14
-    shift_step=3
+    shift_step=7
 
-    train_raw, val_raw, test_raw = DataSplit("Raw data.csv")
+    train_raw, val_raw, test_raw = DataSplit(os.path.join("data", "WTP_raw_data.csv"))
 
     drop_cols = DropNaNCols(train_raw)
     train_raw = ApplyNaNDrop(train_raw, drop_cols)
@@ -369,21 +370,37 @@ def main():
         "batch_size": [16, 32, 64]  # "batch_size": [16, 32, 64]
     }
 
-    results = TuneCNN(
-    X_train_seq,
-    y_train,
-    X_val_seq,
-    y_val,
-    search_space,
-    n_trials=50,
-    epochs=200,
-    patience=20,
-    seed=42
-    )
-    print(results["best_params"])
-    print(results["trials_df"].head())
-    best_model = results["best_model"]
+    # results = TuneCNN(
+    #     X_train_seq,
+    #     y_train,
+    #     X_val_seq,
+    #     y_val,
+    #     search_space,
+    #     n_trials=50,
+    #     epochs=200,
+    #     patience=20,
+    #     seed=42
+    # )
+    # print(results["best_params"])
+    # print(results["trials_df"].head())
+    # best_model = results["best_model"]
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    best_model = TrainModelCNNRegression(
+        X_train=X_train_seq,
+        y_train=y_train,
+        X_val=X_val_seq,
+        y_val=y_val,
+        batch_size=16,
+        lr=0.001,
+        hidden_channels=64,
+        kernel_size=7,
+        dropout=0.1,
+        epochs=100,
+        patience=15,
+        seed=SEED
+    ).to(device)
 
     test_loader = DataLoader(WindowDataset(X_test_seq, y_test), batch_size=128, shuffle=False)
 
@@ -397,6 +414,17 @@ def main():
     print(f"Test RMSE: {test_metrics['RMSE']:.4f}")
     print(f"Test MAPE: {test_metrics['MAPE']:.4f}")
     print(f"Test R2:   {test_metrics['R2']:.4f}")
-    print(f"Test Max Error: {test_metrics['MaxError']:.4f}")      
+    print(f"Test Max Error: {test_metrics['MaxError']:.4f}")
+
+    save_NN_model(
+        model = best_model,
+        config = best_model.get_config(),
+        save_dir = os.path.join("saved_models", "Optimized_CNN"),
+        extra_params={
+            "window": 14,
+            "shift": 7
+        })
+    print(f"Best model saved to {os.path.join('saved_models', 'Optimized_CNN')}")
+
 if __name__ == "__main__":
     main()
