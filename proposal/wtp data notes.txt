@@ -1,0 +1,20 @@
+data is set up per day (time series)
+
+
+
+
+Aluminum 
+
+raw: after pump
+
+chem:
+
+effluent (output)/treated water (before or after pump at the end)
+
+
+everyday measurements: automated sampler
+irregular smapling: measurement by hand
+
+
+
+Deep learning time-series architecture not widely employed in ontario, especially not in smaller municipalities -- big opportunity for the province
