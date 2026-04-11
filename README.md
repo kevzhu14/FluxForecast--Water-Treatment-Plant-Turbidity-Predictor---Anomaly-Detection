@@ -14,4 +14,5 @@ This project details the initial stages of development of a digital twin for tre
 
 * `data/` : Contains the raw dataset and metric evaluations.
 * `src/` : Core library code.
+    ** `PipelineCaller.py` to run the training loop.
 * `Reports-Deliverables/` : Proposals, Interim & Final Reports, & Powerpoints

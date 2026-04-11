@@ -7,8 +7,8 @@ import random
 from sklearn.metrics import r2_score, mean_squared_error
 import xgboost as xgb
 import torch
-from DataProcessing import DataSplit, DataPrep,RegressionMetrics
-from Naive import NaivePredRegression
+from src.pipeline.DataProcessing import DataSplit, DataPrep,RegressionMetrics
+from src.models.Naive import NaivePredRegression
 
 
 SEED = 42

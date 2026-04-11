@@ -1,18 +1,15 @@
+import os
 import pandas as pd
 import numpy as np
 import random
-from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score,
-                             mean_absolute_error, mean_squared_error, max_error, mean_absolute_percentage_error)
-import xgboost as xgb 
-import os
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import torchmetrics.functional as tmf
-from sklearn.preprocessing import StandardScaler
-from CNNRegression import CNN1DRegressor, RegressionMetrics, EvaluateCNN
-from DataProcessing import DataSplit, SlidingWindowWithTarget, WindowsToNmp, DataProcessing, NormalizeStd, DropNaNCols, ApplyNaNDrop, WindowDataset, save_NN_model
+from src.models.TCNRegression import TCNRegressor, RegressionMetrics, EvaluateTCN
+from src.pipeline.DataProcessing import DataSplit, SlidingWindowWithTarget, WindowsToNmp, DataProcessing, NormalizeStd, DropNaNCols, ApplyNaNDrop, WindowDataset, save_NN_model
 import matplotlib.pyplot as plt
+from pytorch_tcn import TCN
 
 
 SEED = 42
@@ -24,11 +21,11 @@ torch.manual_seed(SEED)
 torch.cuda.manual_seed_all(SEED)
 
 data_folder = 'data'
-figures_folder = os.path.join('figures', 'cnn_results')
-models_folder = 'saved_models'  
+figures_folder = os.path.join('figures', 'tcn_results')
+models_folder = 'saved_models'
 
 
-def TrainModelCNNRegression(
+def TrainModelTCNRegression(
     X_train: np.ndarray,
     y_train: np.ndarray,
     X_val: np.ndarray,
@@ -37,9 +34,14 @@ def TrainModelCNNRegression(
     lr: float = 1e-3,
     epochs: int = 100,
     patience: int = 15,
-    hidden_channels: int = 64,
+    channels=(32, 32, 32),
     kernel_size=3,
     dropout: float = 0.2,
+    fc_hidden: int = 32,
+    dilations=None,
+    dilation_reset=None,
+    use_norm: str = "weight_norm",
+    weight_decay: float = 0.0,
     seed: int = 42
 ):
     torch.manual_seed(seed)
@@ -54,14 +56,18 @@ def TrainModelCNNRegression(
     val_loader   = DataLoader(val_ds, batch_size=batch_size, shuffle=False, drop_last=False)
 
     num_features = X_train.shape[2]
-    model = CNN1DRegressor(
+    model = TCNRegressor(
         num_features=num_features,
-        hidden_channels=hidden_channels,
+        channels=channels,
         kernel_size=kernel_size,
-        dropout=dropout
+        dropout=dropout,
+        fc_hidden=fc_hidden,
+        dilations=dilations,
+        dilation_reset=dilation_reset,
+        use_norm=use_norm
     ).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_fn = nn.MSELoss()
 
     best_val_rmse = float("inf")
@@ -96,12 +102,13 @@ def TrainModelCNNRegression(
         train_mse = running_loss / max(n, 1)
         train_rmse = float(np.sqrt(train_mse))
 
-        y_true_val, y_pred_val = EvaluateCNN(model, val_loader, device)
+
+        y_true_val, y_pred_val = EvaluateTCN(model, val_loader, device)
         val_metrics = RegressionMetrics(
             y_true_val,
             y_pred_val,
             "Val",
-            "CNN",
+            "TCN",
             epoch
         )
         val_rmse = val_metrics["RMSE"]
@@ -134,7 +141,6 @@ def TrainModelCNNRegression(
     if best_state is not None:
         model.load_state_dict(best_state)
 
-    # For downstream analysis and plotting, return the training history and final validation predictions.
     history = {
         "train_rmse": train_rmse_hist,
         "val_rmse": val_rmse_hist,
@@ -147,104 +153,118 @@ def TrainModelCNNRegression(
 
     return model, history
 
-def TuneCNN(
-    X_train,
-    y_train,
-    X_val,
-    y_val,
-    search_space,
-    n_trials=20,
-    epochs=200,
-    patience=20,
-    seed=SEED
-):
-    best_rmse = float("inf")
-    best_params = None
-    best_model = None
-    all_trials = []
 
-    for trial in range(n_trials):
-        params = {
-            "hidden_channels": random.choice(search_space["hidden_channels"]),
-            "kernel_size": random.choice(search_space["kernel_size"]),
-            "dropout": random.choice(search_space["dropout"]),
-            "lr": random.choice(search_space["lr"]),
-            "batch_size": random.choice(search_space["batch_size"]),
-        }
+def TuneTCN(
+        X_train, y_train, X_val, y_val,
+        search_space, n_trials=1, epochs=200, patience=20, seed=42
+    ):
+        best_rmse = float("inf")
+        best_r2 = None
+        best_params = None
+        best_model = None
+        best_history = None
+        all_trials = []
+
+        for trial in range(n_trials):
+            params = {
+                "channels": random.choice(search_space["channels"]),
+                "kernel_size": random.choice(search_space["kernel_size"]),
+                "dropout": random.choice(search_space["dropout"]),
+                "lr": random.choice(search_space["lr"]),
+                "batch_size": random.choice(search_space["batch_size"]),
+                "fc_hidden": random.choice(search_space["fc_hidden"]),
+                "weight_decay": random.choice(search_space["weight_decay"]),
+                "dilation_reset": random.choice(search_space["dilation_reset"]),
+                "use_norm": random.choice(search_space["use_norm"]),
+            }
+
+            print(f"\n==============================")
+            print(f"Trial {trial+1}/{n_trials}")
+            print(params)
+
+            model, history = TrainModelTCNRegression(
+                X_train=X_train, y_train=y_train,
+                X_val=X_val, y_val=y_val,
+                batch_size=params["batch_size"],
+                lr=params["lr"],
+                channels=params["channels"],
+                kernel_size=params["kernel_size"],
+                dropout=params["dropout"],
+                fc_hidden=params["fc_hidden"],
+                weight_decay=params["weight_decay"],
+                dilation_reset=params["dilation_reset"],
+                use_norm=params["use_norm"],
+                epochs=epochs,
+                patience=patience,
+                seed=seed
+            )
+
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            val_loader = DataLoader(WindowDataset(X_val, y_val), batch_size=128, shuffle=False)
+            y_true_val, y_pred_val = EvaluateTCN(model, val_loader, device)
+            metrics = RegressionMetrics(y_true_val, y_pred_val, "Val", "TCN")
+
+            rmse = metrics["RMSE"]
+            r2 = metrics["R2"]
+
+            all_trials.append({
+                "trial": trial + 1,
+                **params,
+                "val_rmse": rmse,
+                "val_mae": metrics["MAE"],
+                "val_mse": metrics["MSE"],
+                "val_mape": metrics["MAPE"],
+                "val_r2": r2
+            })
+
+            if rmse < best_rmse:
+                best_rmse = rmse
+                best_r2 = r2
+                best_params = params
+                best_model = model
+                best_history = history
 
         print("\n==============================")
-        print(f"Trial {trial+1}/{n_trials}")
-        print(params)
+        print("BEST RESULT")
+        print("Best RMSE:", best_rmse)
+        print("Best R2:", best_r2)
+        print("Best parameters:", best_params)
 
-        model, history = TrainModelCNNRegression(
-            X_train=X_train,
-            y_train=y_train,
-            X_val=X_val,
-            y_val=y_val,
-            batch_size=params["batch_size"],
-            lr=params["lr"],
-            hidden_channels=params["hidden_channels"],
-            kernel_size=params["kernel_size"],
-            dropout=params["dropout"],
-            epochs=epochs,
-            patience=patience,
-            seed=seed
-        )
-
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        val_loader = DataLoader(WindowDataset(X_val, y_val), batch_size=128, shuffle=False)
-
-        y_true_val, y_pred_val = EvaluateCNN(model, val_loader, device)
-        metrics = RegressionMetrics(y_true_val, y_pred_val, "Val", "CNN")
-
-        r2 = metrics["R2"]
-        rmse = metrics["RMSE"]
-
-        all_trials.append({
-            "trial": trial + 1,
-            **params,
-            "val_rmse": rmse,
-            "val_mae": metrics["MAE"],
-            "val_mse": metrics["MSE"],
-            "val_mape": metrics["MAPE"],
-            "val_r2": r2
-        })
-
-        # Use rmse as metric, pass other metrics for analysis
-        if rmse < best_rmse:
-            best_rmse = rmse
-            best_r2 = r2
-            best_params = params
-            best_model = model
-            best_history = history
-
-    print("\n==============================")
-    print("BEST RESULT")
-    print("Best RMSE:", best_rmse)
-    print("Best R2:", best_r2)
-    print("Best parameters:", best_params)
-
-    return {
-        "best_model": best_model,
-        "best_params": best_params,
-        "best_rmse": best_rmse,
-        "best_r2": best_r2,
-        "best_history": best_history,
-        "trials_df": pd.DataFrame(all_trials)
-    }
+        return {
+            "best_model": best_model,
+            "best_params": best_params,
+            "best_rmse": best_rmse,
+            "best_r2": best_r2,
+            "best_history": best_history,
+            "trials_df": pd.DataFrame(all_trials)
+        }
 
 def main():
-    # Find the best hyperparameters for CNN, varying window sizes and shift steps
-    window_sizes = [3, 7, 14, 21]   
-    shift_steps = [1, 3, 7] 
+    # Find the best hyperparameters for TCN, varying window sizes and shift steps
+    window_sizes = [3, 7, 14, 21]
+    shift_steps = [1, 3, 7]
 
-    # Search space for hyperparameter tuning
     search_space = {
-        "hidden_channels": [16, 32, 64, 128], # "hidden_channels": [16, 32, 64, 128]
-        "kernel_size": [3, 5, 7],  # "kernel_size": [3, 5, 7],
-        "dropout": [0.0, 0.1, 0.2, 0.4],  # "dropout": [0.0, 0.1, 0.2, 0.4]
-        "lr": [1e-4, 3e-4, 1e-3],  # "lr": [1e-4, 3e-4, 1e-3]
-        "batch_size": [16, 32, 64]  # "batch_size": [16, 32, 64]
+        "channels": [
+            (16, 16),
+            (16, 16, 16),
+            (32, 32),
+            (32, 32, 32),
+            (64, 64),
+            (64, 64, 64),
+            (16, 32, 64),
+            (32, 32, 64),
+            (32, 64, 64),
+            (32, 64, 128),
+        ],
+        "kernel_size": [2, 3, 5, 7],
+        "dropout": [0.0, 0.1, 0.2, 0.3, 0.4],
+        "lr": [1e-4, 3e-4, 1e-3, 3e-3],
+        "batch_size": [16, 32, 64, 128],
+        "fc_hidden": [16, 32, 64, 128],
+        "weight_decay": [0.0, 1e-6, 1e-5, 1e-4, 1e-3],
+        "use_norm": ["weight_norm", "batch_norm", "layer_norm", None],
+        "dilation_reset": [None, 4, 8, 16],
     }
 
     train_raw, val_raw, test_raw = DataSplit(os.path.join(data_folder, "WTP_raw_data.csv"))
@@ -260,7 +280,7 @@ def main():
 
     all_results = []
 
-    # Iterate over window sizes and shift steps, train and evaluate CNN for each combination
+    # Iterate over window sizes and shift steps, train and evaluate TCN for each combination
     for window_size in window_sizes:
         for shift_step in shift_steps:
             print(f"\n=== Window Size: {window_size}, Shift Step: {shift_step} ===")
@@ -272,29 +292,28 @@ def main():
             X_val_seq,   y_val   = WindowsToNmp(val_data)
             X_test_seq,  y_test  = WindowsToNmp(test_data)
             X_train_seq, X_val_seq, X_test_seq, scaler = NormalizeStd(X_train_seq,X_val_seq,X_test_seq)
-
-            print(f"Running window_size={window_size}, shift_step={shift_step} ...")
             
-            CNN_results = TuneCNN(
-                X_train_seq,
-                y_train,
-                X_val_seq,
-                y_val,
-                search_space,
-                n_trials=20,
-                epochs=200,
-                patience=20,
-                seed=SEED
+            TCN_results = TuneTCN(
+                    X_train_seq,
+                    y_train,
+                    X_val_seq,
+                    y_val,
+                    search_space,
+                    n_trials=20,
+                    epochs=200,
+                    patience=20,
+                    seed=SEED
             )
 
             all_results.append({
                 "window_size": window_size,
                 "shift_step": shift_step,
-                "best_model": CNN_results["best_model"],
-                "best_rmse": CNN_results["best_rmse"],
-                "best_r2": CNN_results["best_r2"],
-                "best_history": CNN_results["best_history"],
-                **CNN_results["best_params"]
+                "scaler": scaler,
+                "best_model": TCN_results["best_model"],
+                "best_rmse": TCN_results["best_rmse"],
+                "best_r2": TCN_results["best_r2"],
+                "best_history": TCN_results["best_history"],
+                **TCN_results["best_params"]
             })
 
     # Print best results for all window sizes and shift steps
@@ -302,8 +321,8 @@ def main():
     for res in all_results:
         print(f"Window Size: {res['window_size']}, Shift Step: {res['shift_step']}, "
             f"Best RMSE: {res['best_rmse']:.4f}, Best R2: {res['best_r2']:.4f}, "
-            f"Params: hidden_channels={res['hidden_channels']}, kernel_size={res['kernel_size']}, "
-            f"dropout={res['dropout']}, lr={res['lr']}, batch_size={res['batch_size']}")
+            f"Params: channels={res['channels']}, batch_size={res['batch_size']}, kernel_size={res['kernel_size']}, "
+            f"dropout={res['dropout']}, lr={res['lr']}, fc_hidden={res['fc_hidden']}")
 
     # Sort results by best_rmse to find optimal window size and shift step
     all_results_sorted = sorted(all_results, key=lambda x: x["best_rmse"])
@@ -314,8 +333,8 @@ def main():
 
     # Save all results to a CSV for further analysis
     results_df = pd.DataFrame(all_results_sorted)
-    results_df.drop(columns=["best_model", "best_history"]).to_csv(os.path.join(data_folder, "cnn_tuning_results.csv"), index=False)
-    print(f"All tuning results saved to {os.path.join(data_folder, 'cnn_tuning_results.csv')}")
+    results_df.drop(columns=["best_model", "best_history", "scaler"]).to_csv(os.path.join(data_folder, "tcn_tuning_results.csv"), index=False)
+    print(f"All tuning results saved to {os.path.join(data_folder, 'tcn_tuning_results.csv')}")
 
     #Plot best RMSE for each window size and shift step
     plt.figure(figsize=(10, 5))
@@ -327,7 +346,7 @@ def main():
     plt.ylabel("Validation RMSE")
     plt.title("Validation RMSE by Window/Shift Combination")
     plt.tight_layout()
-    plt.savefig(os.path.join(figures_folder,"CNN_gridsearch_val_rmse.png"), dpi=300)
+    plt.savefig(os.path.join(figures_folder,"TCN_gridsearch_val_rmse.png"), dpi=300)
     plt.close()
 
     #Plot best R2 for each window size and shift step
@@ -341,7 +360,7 @@ def main():
     plt.title("Validation R² by Window/Shift Combination")
     plt.ylim(-0.5, 1)
     plt.tight_layout()
-    plt.savefig(os.path.join(figures_folder,"CNN_gridsearch_val_r2.png"), dpi=300)
+    plt.savefig(os.path.join(figures_folder,"TCN_gridsearch_val_r2.png"), dpi=300)
     plt.close()
 
     #Plot history of the best model
@@ -357,7 +376,7 @@ def main():
     plt.title("Training Error Metrics")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(os.path.join(figures_folder, "training_errors_CNN.png"), dpi=300)
+    plt.savefig(os.path.join(figures_folder, "training_errors_TCN.png"), dpi=300)
     plt.close()
 
     #Plot val r2 history of the best model
@@ -367,14 +386,13 @@ def main():
     plt.ylabel("R²")
     plt.title("Validation R²")
     plt.legend()
-    plt.ylim(-0.5, 1)
     plt.tight_layout()
-    plt.savefig(os.path.join(figures_folder, "training_r2_CNN.png"), dpi=300)
+    plt.savefig(os.path.join(figures_folder, "training_r2_TCN.png"), dpi=300)
     plt.close()
     print(f"Training history plots saved to {figures_folder}")
 
     # Save the best model for future assessment
-    model_name = "Optimized_CNN"
+    model_name = "Optimized_TCN"
 
     save_NN_model(
         model = all_results_sorted[0]["best_model"],

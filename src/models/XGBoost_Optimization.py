@@ -7,7 +7,7 @@ import random
 from sklearn.metrics import r2_score,mean_absolute_error, mean_squared_error 
 import xgboost as xgb
 import torch
-from DataProcessing import DataSplit
+from src.pipeline.DataProcessing import DataSplit
 from XGBoost import EvaluateXG, plot_best_model, DataPrep
 from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
 

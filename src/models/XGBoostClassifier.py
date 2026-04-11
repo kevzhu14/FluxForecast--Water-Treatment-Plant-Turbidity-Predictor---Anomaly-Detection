@@ -11,7 +11,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torchmetrics.functional as tmf
 from sklearn.preprocessing import StandardScaler
-from DataProcessing import (DataSplit, SlidingWindowWithTarget, WindowsToNmp, 
+from src.pipeline.DataProcessing import (DataSplit, SlidingWindowWithTarget, WindowsToNmp, 
                               DataProcessing, NormalizeStd, FlattenData, DropNaNCols, ApplyNaNDrop, ClassificationMetrics)
 import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt

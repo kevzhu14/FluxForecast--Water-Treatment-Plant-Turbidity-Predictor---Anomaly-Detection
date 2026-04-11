@@ -10,13 +10,13 @@ from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_s
 import torch
 from torch.utils.data import DataLoader
 import xgboost as xgb
-from DataProcessing import (DataSplit, SlidingWindowWithTarget, WindowsToNmp, DataProcessing, NormalizeStd, 
+from src.pipeline.DataProcessing import (DataSplit, SlidingWindowWithTarget, WindowsToNmp, DataProcessing, NormalizeStd, 
                                  DropNaNCols, ApplyNaNDrop, DataPrep, WindowDataset)
 
 # Import models and modules
-from Naive import NaivePredRegression
-from CNN_Regression_Tuning import CNN1DRegressor, EvaluateCNN
-from TCN_Regression_Tuning import TCNRegressor, EvaluateTCN
+from src.models.Naive import NaivePredRegression
+from src.models.CNN_Regression_Tuning import CNN1DRegressor, EvaluateCNN
+from src.models.TCN_Regression_Tuning import TCNRegressor, EvaluateTCN
 
 
 SEED = 42

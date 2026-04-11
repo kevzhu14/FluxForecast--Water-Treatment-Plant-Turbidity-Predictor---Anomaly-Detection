@@ -1,3 +1,12 @@
+import sys
+import os
+
+# Get the absolute path of the 'WTP' directory
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if root_path not in sys.path:
+    sys.path.append(root_path)
+
+
 import pandas as pd
 import numpy as np
 import random
@@ -15,14 +24,14 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 from DataProcessing import (DataSplit, SlidingWindowWithTarget, WindowsToNmp, 
                               DataProcessing, NormalizeStd, FlattenData, DropNaNCols, ApplyNaNDrop)
-from CNNClassifier import (CNN1DClassifier, TrainModelCNNClassifier, EvaluateCNN, TorchPredict)
-from CNNRegression import (CNN1DRegressor, TrainModelCNNRegression)
-from Naive import (NaivePredClassifier, NaivePredRegression)
+from src.models.CNNClassifier import (CNN1DClassifier, TrainModelCNNClassifier, EvaluateCNN, TorchPredict)
+from src.models.CNNRegression import (CNN1DRegressor, TrainModelCNNRegression)
+from src.models.Naive import (NaivePredClassifier, NaivePredRegression)
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve, precision_recall_curve
-from TCNClassifier import (TCNClassifier, TrainModelTCNClassifier)
-from TCNRegression import (TCNRegressor, TrainModelTCNRegression)
+from src.models.TCNClassifier import (TCNClassifier, TrainModelTCNClassifier)
+from src.models.TCNRegression import (TCNRegressor, TrainModelTCNRegression)
 import json
-from Model_Comparison import load_CNN_model, load_TCN_model
+from src.models.Model_Comparison import load_CNN_model, load_TCN_model
 
 SEED = 42
 
