@@ -1,4 +1,6 @@
-# FluxForecast: Water Treatment Plant Digital Twin for Turbidity Prediction (CHE1148 Course Project) 
+# *FluxForecast*: Water Treatment Plant Digital Twin for Turbidity Prediction (CHE1148 Course Project) 
+
+This project details the initial stages of development of a digital twin for treated water turbidity prediction based on a machine learning model-backbone, using real water treatment plant data. Work is primarily centered around the implementation of a temporal convolutional network in comparison to baseline models. 
 
 # **Process Schematic** 
 ![Alternative text if image does not load](repo_figures/wtp.png)
