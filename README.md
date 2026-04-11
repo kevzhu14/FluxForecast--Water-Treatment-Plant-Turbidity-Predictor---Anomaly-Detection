@@ -1,6 +1,9 @@
-# FluxForecast: Water Treatment Plant Turbidity Prediction (CHE1148 Course Project) 
+# FluxForecast: Water Treatment Plant Digital Twin for Turbidity Prediction (CHE1148 Course Project) 
 
+# **Process Schematic** 
 ![Alternative text if image does not load](repo_figures/wtp.png)
+
+# **Pipeline** 
 ![Alternative text if image does not load](repo_figures/final_pipeline.png)
 
 
